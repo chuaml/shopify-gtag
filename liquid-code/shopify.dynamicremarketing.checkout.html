@@ -1,0 +1,51 @@
+<!-- place in Setting -> Checkout -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-000000000"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'AW-000000000');
+</script>
+
+<!-- Dynamic Remarketing  -->
+<script>
+    if ('{{order_number}}'.trim() !== '' && '{{currency}}'.trim() !== '') {
+        const HTML = {
+            _txt: document.createElement('textarea'),
+            decode: function (text) {
+                this._txt.innerHTML = text;
+                return this._txt.innerText.trim();
+            }
+        };
+
+        const PRODUCT_ID_TYPE = 'default';
+        const COUNTRY = 'US'; // if PRODUCT_ID_TYPE is default, use this and set correct country according to product Id, else ignore
+
+        gtag('event', 'purchase', {
+            'send_to': dataLayer.filter(function (x) { return x.length < 2 ? false : x[0] === 'config' && x[1].startsWith('AW-'); }).map(function (x) { return x[1]; }),
+            'currency': '{{currency}}'.trim(),
+            'value': parseInt('{{checkout.subtotal_price}}') / 100,
+            'items': [
+                //   {% for line_item in checkout.line_items %}
+                {
+                    default: 'shopify_' + COUNTRY + '_{{line_item.product_id}}_{{line_item.variant_id}}',
+                    sku: HTML.decode('{{line_item.sku | escape}}'),
+                    product_id: '{{line_item.variant_id}}',
+                    parent_id: '{{line_item.parent_id}}',
+
+                    custom: '{{line_item.product_id}}_{{line_item.variant_id}}'
+                },
+                //   {% endfor %}
+            ].map(function (x) {
+                return {
+                    id: x[PRODUCT_ID_TYPE],
+                    google_business_vertical: 'retail',
+                };
+            }),
+        });
+
+        localStorage.removeItem('ads.dynamic_remarketing.begin_checkout.items');
+    }
+</script>

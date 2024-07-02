@@ -1,0 +1,165 @@
+<!-- place in Online store -> [...] -> Edit code -> theme.liquid  -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-000000000"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'AW-000000000');
+</script>
+
+<script>
+    // Dynamic Remarketing [ begin_checkout, view_item, add_to_cart ]
+    document.addEventListener('DOMContentLoaded', function (ev) { // wait for window.Shopify 
+        const HTML = {
+            _txt: document.createElement('textarea'),
+            decode: function (text) {
+                this._txt.innerHTML = text;
+                return this._txt.innerText.trim();
+            }
+        };
+        const CURRENCY = window.Shopify?.currency?.active || '{{shop.currency}}'; // use seller's shop.currency if none
+        const Ads_Ids = dataLayer.filter(function (x) { return x.length < 2 ? false : x[0] === 'config' && x[1].startsWith('AW-'); }).map(function (x) { return x[1]; });
+
+
+        const PRODUCT_ID_TYPE = 'default';
+        const COUNTRY = 'US'; // if PRODUCT_ID_TYPE is default, use this and set correct country according to product Id, else ignore
+
+        const cartItems_additional = [];
+
+        // begin checkout
+        function handle_begin_checkout(cartItems_additional = []) {
+            const items = [
+                // {%- for line_item in cart.items %}
+                {
+                    price: parseInt('{{line_item.price}}') / 100,
+                    quantity: parseInt('{{line_item.quantity}}'),
+
+                    default: 'shopify_' + COUNTRY + '_{{line_item.product_id}}_{{line_item.variant_id}}',
+                    sku: HTML.decode('{{line_item.sku | escape}}'),
+                    product_id: '{{line_item.variant_id}}'.trim(), // product varient id
+                    parent_id: '{{line_item.product_id}}'.trim(), // product parent id
+
+                    custom: '{{line_item.product_id}}_{{line_item.variant_id}}'
+                },
+                // {% endfor %}
+            ].map(function (x) {
+                return {
+                    id: x[PRODUCT_ID_TYPE],
+                    google_business_vertical: 'retail',
+                    price: x.price,
+                    quantity: x.quantity,
+                };
+            }).concat(cartItems_additional);
+            console.table(items);
+
+            // prevent re-sending begin checkout for the same cart items
+            const cartItems = JSON.stringify(items);
+            if (cartItems === localStorage['ads.dynamic_remarketing.begin_checkout.items'])
+                throw new Error('the same begin_checkout already trigger once previously');
+
+            gtag('event', 'begin_checkout', {
+                send_to: Ads_Ids,
+                currency: CURRENCY,
+                value: Math.round(
+                    items.map(function (x) { return x.quantity * x.price; })
+                        .reduce(function (cfx, x) { return cfx + x; }, 0.00)
+                    * 100) / 100,
+                items: items
+            });
+
+            // to avoid duplicate begin checkout when refreshing page
+            localStorage['ads.dynamic_remarketing.begin_checkout.items'] = cartItems;
+        }
+        document.addEventListener('click', function (e) {
+            const isBtnCheckout = e.target.matches('[name=checkout], .btn-checkout');
+            if (isBtnCheckout === null) return;
+
+            handle_begin_checkout(cartItems_additional);
+        });
+        if (location.pathname.startsWith('/cart') === true) {
+            setTimeout(handle_begin_checkout, 0);
+        }
+
+
+        if (location.pathname.includes('/products/') === true
+            || location.pathname.includes('/collections/') === true) { // view_item , add to cart , begin_checkout buy 1
+            if ('{{product.id}}'.trim() !== '') { // is in product page
+                const PRODUCT_IDs = {
+                    default: 'shopify_' + COUNTRY + '_{{product.id}}_{{product.selected_or_first_available_variant.id}}',
+                    sku: HTML.decode('{{ product.selected_or_first_available_variant.sku | escape}}'),
+                    product_id: '{{ product.selected_or_first_available_variant.id }}'.trim(),
+                    parent_id: '{{product.id}}'.trim(),
+
+                    custom: '{{product.id}}_{{product.selected_or_first_available_variant.id}}'
+                };
+
+
+                // view product
+                setTimeout(() => {
+                    gtag('event', 'view_item', {
+                        send_to: Ads_Ids,
+                        currency: CURRENCY,
+                        items: [
+                            {
+                                id: PRODUCT_IDs[PRODUCT_ID_TYPE],
+                                google_business_vertical: 'retail',
+                                price: parseInt('{{product.price}}') / 100
+                            }
+                        ]
+                    });
+                }, 1000);
+
+                // add to cart (product view)
+                document.addEventListener('mouseup', function (e) {
+                    const isBtnAddToCart = e.target.matches('[name=add], #addtocart_button, .add-to-cart');
+                    if (isBtnAddToCart === false) return;
+
+                    const x = {};
+                    x.id = PRODUCT_IDs[PRODUCT_ID_TYPE];
+                    x.google_business_vertical = 'retail';
+                    x.price = parseInt('{{product.price}}') / 100;
+                    x.quantity = document.querySelector('input[name=quantity]')?.value ?? 1;
+
+                    gtag('event', 'add_to_cart', {
+                        send_to: Ads_Ids,
+                        currency: CURRENCY,
+                        items: [x]
+                    });
+                    cartItems_additional.push(x);
+
+                }, { passive: true });
+
+                // begin_checkout (product view - direct purchase 1 item)
+                document.addEventListener('click', function (e) {
+                    const isBtnCheckout = e.target.matches('.shopify-payment-button__button');
+                    if (isBtnCheckout === false) return;
+
+                    const item = {
+                        id: PRODUCT_IDs[PRODUCT_ID_TYPE],
+                        google_business_vertical: 'retail',
+                        price: parseInt('{{product.price}}') / 100,
+                        quantity: 1,
+                    };
+
+                    // prevent re-sending begin checkout for the same cart items
+                    const cartItems = JSON.stringify([item]);
+                    if (cartItems === localStorage['ads.dynamic_remarketing.begin_checkout.items'])
+                        throw new Error('the same begin_checkout already trigger once previously');
+
+                    gtag('event', 'begin_checkout', {
+                        send_to: Ads_Ids,
+                        currency: CURRENCY,
+                        value: item.price,
+                        items: [item]
+                    });
+                    // to avoid duplicate begin checkout when refreshing page
+                    localStorage['ads.dynamic_remarketing.begin_checkout.items'] = cartItems;
+                });
+
+            }
+        }
+
+    });
+</script>

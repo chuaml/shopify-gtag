@@ -1,0 +1,46 @@
+<script>
+    // search
+    document.addEventListener('submit', function (e) {
+        if (e.target.matches('form[action="/search"]') === false) return;
+        const form = e.target;
+        const txtSearch = form.querySelector('input[type=search]');
+        const searchValue = txtSearch.value.trim();
+        if (searchValue === '') return;
+
+        gtag('event', 'search', { search_term: searchValue });
+    });
+</script>
+
+<script>
+    // login | sign in
+    document.addEventListener('submit', function (e) {
+        if (e.target.matches('form[action*="/account/login"]') === false) return;
+        const form = e.target;
+        const email = form.querySelector('input[type=email]:enabled:not(:read-only)'
+            + ', input[name*="mail"]:enabled:not(:read-only)').value.trim().toLowerCase();
+        if (/[^@ ]+@[^@ ]{2,}/.test(email) === false)
+            throw new Error('invalid email: "' + email + '"');
+
+        if (form.querySelector('input[type="password"]')?.value === '')
+            throw new Error('no password filled');
+
+        gtag('event', 'login');
+    });
+</script>
+
+<script>
+    // register | sign up
+    document.addEventListener('submit', function (e) {
+        if (e.target.matches('form#create_customer') === false) return;
+        const form = e.target;
+        const email = form.querySelector('input[type=email]:enabled:not(:read-only)'
+            + ', input[name*="mail"]:enabled:not(:read-only)').value.trim().toLowerCase();
+        if (/[^@ ]+@[^@ ]{2,}/.test(email) === false)
+            throw new Error('invalid email: "' + email + '"');
+
+        if (form.querySelector('input[type="password"]')?.value === '')
+            throw new Error('no password filled');
+
+        gtag('event', 'sign_up');
+    });
+</script>

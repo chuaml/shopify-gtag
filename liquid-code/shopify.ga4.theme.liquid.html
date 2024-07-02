@@ -1,0 +1,162 @@
+<!-- place in Online store -> [...] -> Edit code -> theme.liquid  -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=Gxxxxxxxx"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'Gxxxxxxxx', { send_page_view: true });
+</script>
+
+<script>
+    // GA4 Ecommerce [ begin_checkout, view_item, add_to_cart ]
+    document.addEventListener('DOMContentLoaded', function (ev) { // wait for window.Shopify 
+        const HTML = {
+            _txt: document.createElement('textarea'),
+            decode: function (text) {
+                this._txt.innerHTML = text;
+                return this._txt.innerText.trim();
+            }
+        };
+
+        const CURRENCY = window.Shopify?.currency?.active || '{{shop.currency}}'; // use seller's shop.currency if none
+        const GA4_Ids = dataLayer.filter(function (x) { return x.length < 2 ? false : x[0] === 'config' && x[1].startsWith('G'); }).map(function (x) { return x[1]; });
+
+        const cartItems_additional = [];
+
+        // begin checkout
+        function handle_begin_checkout(cartItems_additional = []) {
+            const items = [
+                // {%- for line_item in cart.items %}
+                {
+                    item_id: '{{line_item.product_id}}_{{line_item.variant_id}}',
+                    item_name: HTML.decode('{{line_item.title | escape}}'),
+                    price: parseInt('{{line_item.price}}') / 100,
+                    quantity: parseInt('{{line_item.quantity}}'),
+                    item_category: HTML.decode('{{line_item.sku | escape}}'),
+                },
+                // {% endfor %}
+            ].concat(cartItems_additional);
+            console.table(items);
+
+            // prevent re-sending begin checkout for the same cart items
+            const cartItems = JSON.stringify(items);
+            if (cartItems === localStorage['ga4.begin_checkout.items'])
+                throw new Error('the same begin_checkout already trigger once previously');
+
+            gtag('event', 'begin_checkout', {
+                send_to: GA4_Ids,
+                currency: CURRENCY,
+                value: Math.round(
+                    items.map(function (x) { return x.quantity * x.price; })
+                        .reduce(function (cfx, x) { return cfx + x; }, 0.00)
+                    * 100) / 100,
+                items: items
+            });
+
+            // to avoid duplicate begin checkout when refreshing page
+            localStorage['ga4.begin_checkout.items'] = cartItems;
+        }
+        document.addEventListener('click', function (e) {
+            const isBtnCheckout = e.target.matches('[name=checkout], .btn-checkout');
+            if (isBtnCheckout === false) return;
+
+            handle_begin_checkout(cartItems_additional);
+        });
+        if (location.pathname.startsWith('/cart') === true) {
+            setTimeout(handle_begin_checkout, 0);
+        }
+
+
+        if (location.pathname.includes('/products/') === true
+            || location.pathname.includes('/collections/') === true) { // view_item , add to cart
+            const productId = '{{product.id}}';
+            if (productId.trim() !== '') {
+                // view product
+                setTimeout(() => {
+                    gtag('event', 'view_item', {
+                        send_to: GA4_Ids,
+                        currency: CURRENCY,
+                        items: [
+                            {
+                                item_id: '{{product.id}}_{{product.selected_or_first_available_variant.id}}',
+                                item_name: HTML.decode('{{product.title | escape}}'),
+                                price: parseInt('{{product.price}}') / 100,
+                                item_category: HTML.decode('{{product.selected_or_first_available_variant.sku | escape}}'),
+                            }
+                        ]
+                    });
+                }, 1000);
+
+                // add to cart (product view)
+                document.addEventListener('mouseup', function (e) {
+                    const isBtnAddToCart = e.target.matches('[name=add], #addtocart_button, .add-to-cart');
+                    if (isBtnAddToCart === false) return;
+
+                    const x = {};
+                    x.item_id = '{{product.id}}_{{product.selected_or_first_available_variant.id}}';
+                    x.item_name = HTML.decode('{{product.title | escape}}');
+                    x.price = parseInt('{{product.price}}') / 100;
+                    x.quantity = document.querySelector('input[name=quantity]')?.value ?? 1;
+                    x.item_category = HTML.decode('{{product.selected_or_first_available_variant.sku | escape}}');
+
+                    gtag('event', 'add_to_cart', {
+                        send_to: GA4_Ids,
+                        currency: CURRENCY,
+                        items: [x]
+                    });
+                    cartItems_additional.push(x);
+
+                }, { passive: true });
+
+                // begin_checkout (product view - direct purchase 1 item)
+                document.addEventListener('click', function (e) {
+                    const isBtnCheckout = e.target.matches('.shopify-payment-button__button');
+                    if (isBtnCheckout === false) return;
+
+                    const item = {
+                        item_id: '{{product.id}}_{{product.selected_or_first_available_variant.id}}',
+                        item_name: HTML.decode('{{product.title | escape}}'),
+                        price: parseInt('{{product.price}}') / 100,
+                        quantity: document.querySelector('input[name=quantity]')?.value ?? 1,
+                        item_category: HTML.decode('{{product.selected_or_first_available_variant.sku | escape}}'),
+                    };
+
+                    // prevent re-sending begin checkout for the same cart items
+                    const cartItems = JSON.stringify([item]);
+                    if (cartItems === localStorage['ga4.begin_checkout.items'])
+                        throw new Error('the same begin_checkout already trigger once previously');
+
+                    gtag('event', 'begin_checkout', {
+                        send_to: GA4_Ids,
+                        currency: CURRENCY,
+                        value: item.price,
+                        items: [item]
+                    });
+                    // to avoid duplicate begin checkout when refreshing page
+                    localStorage['ga4.begin_checkout.items'] = cartItems;
+                });
+
+            }
+        }
+
+    });
+</script>
+
+<script>
+    window.addEventListener('DOMContentLoaded', function (ev) {
+        // re-try previously queue gtag purchase; if network fail, re-try later
+        const pendingPurchase = {
+            get data() { return JSON.parse(localStorage['gtag.ga4.purchase.pending'] || 'null'); },
+            set data(data) { localStorage['gtag.ga4.purchase.pending'] = JSON.stringify(data); },
+            flush: function () {
+                const data = this.data;
+                if (data === null) return;
+                data.event_callback = function (d) { localStorage.removeItem('gtag.ga4.purchase.pending'); };
+                gtag('event', 'purchase', data);
+            },
+        };
+        pendingPurchase.flush(); // send out previous existing purchase data
+    });
+</script>

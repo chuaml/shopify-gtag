@@ -1,0 +1,78 @@
+<!-- place in Setting -> Checkout -->
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=Gxxxxxxxx"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'Gxxxxxxxx', { send_page_view: true });
+</script>
+
+<script>
+    // GA4 purchase
+    (function () {
+        const HTML = {
+            _txt: document.createElement('textarea'),
+            decode: function (text) {
+                this._txt.innerHTML = text;
+                return this._txt.innerText.trim();
+            }
+        };
+
+        const data = {
+            'send_to': dataLayer.filter(function (x) { return x.length < 2 ? false : x[0] === 'config' && x[1].startsWith('G'); }).map(function (x) { return x[1]; }),
+            'transaction_id': '{{order_number}}'.trim(), // actual Shopify tid : {{id}}
+            'currency': '{{currency}}'.trim(), // might be empty not loaded yet when changing currency preference
+
+            'value': parseInt('{{checkout.subtotal_price}}') / 100, // discounted price, exclude -[tax, shipping]
+            // 'value': parseInt('{{total_price}}') / 100, // total price include +[tax, shipping]
+
+            'tax': parseInt('{{tax_price}}') / 100,
+            'shipping': parseInt('{{shipping_price}}') / 100,
+            'coupon': HTML.decode('{{order.name | escape}}'),
+            'items': [
+                // {% for line_item in line_items %}
+                {
+                    'item_id': '{{line_item.product_id}}_{{line_item.variant_id}}',
+                    'item_name': HTML.decode('{{line_item.title | escape}}'),
+                    'quantity': parseInt('{{line_item.quantity}}'),
+                    'price': parseFloat('{{line_item.final_line_price | divided_by: line_item.quantity}}') / 100,
+                    'discount': parseFloat('{{line_item.line_level_total_discount | divided_by: line_item.quantity}}') / 100,
+                    'item_category': HTML.decode('{{line_item.sku | escape}}'),
+                },
+                // {% endfor %}
+            ]
+        };
+        // console.log({ ga4_purchase_data: data });
+
+        // queue gtag purchase; if network fail, re-try later
+        const pendingPurchase = {
+            get data() { return JSON.parse(localStorage['gtag.ga4.purchase.pending'] || 'null'); },
+            set data(data) { localStorage['gtag.ga4.purchase.pending'] = JSON.stringify(data); },
+            flush: function () {
+                const data = this.data;
+                if (data === null) return;
+                data.event_callback = function (d) { localStorage.removeItem('gtag.ga4.purchase.pending'); };
+                gtag('event', 'purchase', data);
+            },
+        };
+        pendingPurchase.flush(); // send out previous existing purchase data
+
+        // if ('{{first_time_accessed}}' !== 'true') throw new Error('this page is not first time access, GA4 purchase tracking is skipped.'); // to track only on first time checkout success page open
+
+        if ('{{order_number}}'.trim() === '') { // transaction is not complete yet at backends
+            gtag('event', 'purchase_no_order_number', data);
+        }
+        else if ('{{currency}}'.trim() === ''
+            || /[A-Z]{3}/.test(data.currency) === false) { // currency is not provided yet from Shopify backend
+            gtag('event', 'purchase_no_currency', data);
+        }
+        else {
+            pendingPurchase.data = data;
+            pendingPurchase.flush();
+        }
+        localStorage['ga4.begin_checkout.items'] = '[]';
+
+    })();
+</script>
