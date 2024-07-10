@@ -62,6 +62,25 @@ function gtag() { dataLayer.push(arguments); }
         gtag('js', new Date());
         gtag('config', GA4_MEASUREMENT_ID);
     });
+
+    { // patches for common events
+        const _sendEnagement = (engagedTime) => {
+            if (engagedTime >= 1000)
+                gtag('event', 'user_engagement', { engagement_time_msec: Math.min(engagedTime, 600000) });
+        };
+        let lastFocusTime = Date.now();
+        document.addEventListener('visibilitychange', e => {
+            if (document.visibilityState === 'visible') {
+                lastFocusTime = Date.now();
+            }
+            else {
+                _sendEnagement(Date.now() - lastFocusTime);
+            }
+        });
+        window.addEventListener('beforeunload', e => {
+            _sendEnagement(Date.now() - lastFocusTime);
+        });
+    }
 }
 
 
