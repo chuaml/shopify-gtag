@@ -8,7 +8,52 @@ code to be added in [Shopify's Customer Event](https://help.shopify.com/en/manua
 > WARNING: code here make no guarantee the success or correctness or anykind of promises.
 > the integration rely on Shopify's platform system and software code and Google Analytics to work properly.
 
-## technical detail for nerds
+
+# Known issues | Limitations
+
+Below are some of the known issues (but not all) of using the provided code to integrate Google Analytics 4 (GA4) tracking into Shopify via the Shopify Customer Event -> Custom Pixel.
+
+Integrating GA4 via Custom Pixel will result certain GA4 automatic collected events not working normally or correctly
+- https://support.google.com/analytics/answer/9234069?hl=en
+
+> Customer Event's Custom Pixel will be placing code into an separated `<iframe>` child window which impose security restrictions,
+> resulting in certain events cannot be tracked properly, e.g. `click`, `scroll`, `form_start`, parent page focus and etc. 
+
+
+## [Enhanced Event Measurements](https://support.google.com/analytics/answer/9216061?hl=en)
+
+certain Enhanced Event Measurements will not work properly in Custom Pixel, e.g.:
+- `scroll` will always falsely trigger and sent
+- `click` outbound clicks on `<a>` cannot be detected and will not trigger 
+- etc...
+- https://support.google.com/analytics/answer/9216061?hl=en
+
+
+## Engagement missing
+
+engagement will not be tracked
+https://support.google.com/analytics/answer/11109416?hl=en
+- `user_engagement` will not trigger
+- `engagement_time_msec` will no be recorded nor included in `scroll` or other common event
+
+> the provided Custom Pixel code fix such issue by manually computing `engagement_time_msec` and sending `user_engagement` event, but the result may different than original auto tracked engagement time;
+> e.g. higher engaged time `engagement_time_msec` and higher `user_engagement` event count, that is, higher engagement rate with false positive
+
+
+
+---
+
+# references
+
+code based on public developer docs:
+- [Google's Advanced Consent Mode](https://support.google.com/google-ads/answer/10000067)
+- [Google Analytics 4 - Events](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#make_a_purchase_or_issue_a_refund)
+- [Google Dynamic Remarketing - Events](https://support.google.com/google-ads/answer/7305793)
+- [Shopify Customer Event - Standard Events](https://shopify.dev/docs/api/web-pixels-api/standard-events/)
+
+
+
+# technical detail for nerds
 
 there are few thing to be aware of about the Shopify's Customer Event:
 * code within Customer Event will have global variable `analytics` to be injected automatically on top of code, and Shopify's [custom events](https://shopify.dev/docs/api/web-pixels-api/standard-events/) triggeration may be used by subscribing to it
@@ -22,13 +67,3 @@ there are few thing to be aware of about the Shopify's Customer Event:
 * the Customer Event `<iframe>` will behave like a Single Page App in the begin checkout page, process page, final checkout completed `/thank-you` page; that is, the `<iframe>` will be persisted across pages and not being disposed nor reloaded even when its parent page is reloaded or page is changed. this will result:
     - the `dataLayer` to be persisted and its data to be inherit from begin checkout page to the final complete page
     - certain event may behave unexpectedly, e.g. the Google Analytics event `page_view` is not sent in the final complete checkout page
-
-
-
-## references
-
-code based on public developer docs:
-- [Google's Advanced Consent Mode](https://support.google.com/google-ads/answer/10000067)
-- [Google Analytics 4 - Events](https://developers.google.com/analytics/devguides/collection/ga4/ecommerce?client_type=gtag#make_a_purchase_or_issue_a_refund)
-- [Google Dynamic Remarketing - Events](https://support.google.com/google-ads/answer/7305793)
-- [Shopify Customer Event - Standard Events](https://shopify.dev/docs/api/web-pixels-api/standard-events/)
