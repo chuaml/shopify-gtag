@@ -5,6 +5,8 @@ this directory contain template code for quick and dirty integration of Dynamic 
 code to be added in [Shopify's Customer Event](https://help.shopify.com/en/manual/promoting-marketing/pixels/custom-pixels/manage#add-custom-pixel).
 * the code example in this directory should be placed in Shopify's Customer Event instead of traditional `theme.liquid` 
 
+> WARNING: code here make no guarantee the success or correctness or anykind of promises.
+> the integration rely on Shopify's platform system and software code and Google Analytics to work properly.
 
 ## technical detail for nerds
 
@@ -15,7 +17,7 @@ there are few thing to be aware of about the Shopify's Customer Event:
     * code executed in Customer Event will have different `window.location.href` URL, may result different (unxpected) URL to be recorded in Reports, e.g. in Google Analytics Reports
     * `gtag` code within Customer Event will have independent Google's Advanced Consent Mode signal than its parent window; it will not respect its parent windows gtag consent siginal
         * however, the existance of the whole Customer Event `<iframe>` and related code will still be control by Shopify's [Customer Privacy](https://help.shopify.com/en/manual/privacy-and-security/privacy/customer-privacy-settings/privacy-settings) if Customer Privacy is in used where the user's region is affected
-* Shopify's [Customer Privacy](https://help.shopify.com/en/manual/privacy-and-security/privacy/customer-privacy-settings/privacy-settings) and [Shopify's Customer Event](https://help.shopify.com/en/manual/promoting-marketing/pixels/custom-pixels/manage#add-custom-pixel) allow basic control of tracking consent by blocking/removing certain code and Customer Event `<iframe>` dynamically depending on user's consent, but it does not work nicely with [Google's Advanced Consent Mode](https://support.google.com/google-ads/answer/10000067); basically in the Google perspective, Shopify's Customer Privacy work like as a *Basic* Consent Mode of Google.
+* Shopify's [Customer Privacy](https://help.shopify.com/en/manual/privacy-and-security/privacy/customer-privacy-settings/privacy-settings) and [Shopify's Customer Event](https://help.shopify.com/en/manual/promoting-marketing/pixels/custom-pixels/manage#add-custom-pixel) allow basic control of tracking consent by blocking/removing certain code and Customer Event `<iframe>` dynamically depending on user's consent, but it does not work nicely with [Google's Advanced Consent Mode](https://support.google.com/google-ads/answer/10000067); basically in the Google perspective, Shopify's Customer Privacy work like as a *Basic* Consent Mode of Google, unless configured to not block the code and always insert Customer Events Custom Pixel code without needed anymore permission or consent from users.
 * whether a Customer Event `<iframe>` code will be loaded or not is determined by user's consent (via the pop up consent banner or cookie banner of Customer Privacy) and the  Customer Event -> *Permissions* 
 * the Customer Event `<iframe>` will behave like a Single Page App in the begin checkout page, process page, final checkout completed `/thank-you` page; that is, the `<iframe>` will be persisted across pages and not being disposed nor reloaded even when its parent page is reloaded or page is changed. this will result:
     - the `dataLayer` to be persisted and its data to be inherit from begin checkout page to the final complete page

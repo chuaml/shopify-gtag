@@ -10,24 +10,48 @@ const ADS_GOOGLE_TAG_ID = 'AW-0000000000';
 
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
-/* all code here will not exist nor being loaded, so assume default allow tracking when code is loaded */
-gtag('consent', 'default', {
-    ad_storage: 'granted',
-    ad_user_data: 'granted',
-    ad_personalization: 'granted'
-});
 
-// <!-- Google tag (gtag.js) -->
-const script = document.createElement('script');
-script.setAttribute('src', 'https://www.googletagmanager.com/gtag/js?id=' + ADS_GOOGLE_TAG_ID); // change the conversion ID
-script.setAttribute('async', '');
-document.head.appendChild(script);
-gtag('js', new Date());
-analytics.subscribe('page_viewed', (event) => { // https://shopify.dev/docs/api/web-pixels-api/standard-events/page_viewed
-    // may be Single Page App (no full page reload), e.g. in between checkout_started and checkout_completed
-    gtag('set', { page_location: event.context?.window.location.href });
-    gtag('config', ADS_GOOGLE_TAG_ID, { 'allow_enhanced_conversions': true });
-});
+{ // Consent Mode v2
+    gtag('consent', 'default', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        wait_for_update: 100,
+        region: [ // EEA only
+            'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IS', 'IT', 'LI', 'LT', 'LU', 'LV', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'CH'
+        ],
+    });
+
+    const updateConsent = (customerPrivacy) => {
+        const analytics_consent = customerPrivacy.analyticsProcessingAllowed ? 'granted' : 'denied';
+        const ads_consent = customerPrivacy.marketingAllowed ? 'granted' : 'denied';
+        gtag('consent', 'update', {
+            analytics_storage: analytics_consent,
+            ad_storage: ads_consent,
+            ad_user_data: ads_consent,
+            ad_personalization: ads_consent,
+        });
+    };
+    updateConsent(init.customerPrivacy);
+
+    api.customerPrivacy.subscribe('visitorConsentCollected', (event) => {
+        updateConsent(event.customerPrivacy);
+    });
+}
+
+{ // <!-- Google tag (gtag.js) -->
+    const script = document.createElement('script');
+    script.setAttribute('src', 'https://www.googletagmanager.com/gtag/js?id=' + ADS_GOOGLE_TAG_ID); // change the conversion ID
+    script.setAttribute('async', '');
+    document.head.appendChild(script);
+    analytics.subscribe('page_viewed', (event) => { // https://shopify.dev/docs/api/web-pixels-api/standard-events/page_viewed
+        // may be Single Page App (no full page reload), e.g. in between checkout_started and checkout_completed
+        gtag('set', { page_location: event.context?.window.location.href });
+        gtag('js', new Date());
+        gtag('config', ADS_GOOGLE_TAG_ID, { 'allow_enhanced_conversions': true });
+    });
+}
 
 const _setUPD = (checkout) => {
     // const checkout = event.data.checkout;
