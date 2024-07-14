@@ -22,133 +22,208 @@ const GET_PRODUCT_ID = v => v.sku || 'shopify_' + COUNTRY + '_' + v.product.id +
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
 
-{ // Consent Mode v2
-    gtag('consent', 'default', {
-        analytics_storage: 'denied',
-        ad_storage: 'denied',
-        ad_user_data: 'denied',
-        ad_personalization: 'denied',
-        wait_for_update: 100,
-        region: [ // EEA only
-            'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IS', 'IT', 'LI', 'LT', 'LU', 'LV', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'CH'
-        ],
-    });
-
-    const updateConsent = (customerPrivacy) => {
-        const analytics_consent = customerPrivacy.analyticsProcessingAllowed ? 'granted' : 'denied';
-        const ads_consent = customerPrivacy.marketingAllowed ? 'granted' : 'denied';
-        gtag('consent', 'update', {
-            analytics_storage: analytics_consent,
-            ad_storage: ads_consent,
-            ad_user_data: ads_consent,
-            ad_personalization: ads_consent,
-        });
+{ // Google Consent Mode v2
+    const getConsentChoice = (customerPrivacy) => {
+        const consent = {
+            analytics_storage: 'denied',
+            ad_storage: 'denied',
+            ad_user_data: 'denied',
+            ad_personalization: 'denied'
+        };
+        if (customerPrivacy.saleOfDataAllowed === true) {
+            if (customerPrivacy.analyticsProcessingAllowed === true) {
+                consent.analytics_storage = 'granted';
+            }
+            if (customerPrivacy.marketingAllowed === true) {
+                consent.ad_storage = 'granted';
+                consent.ad_user_data = 'granted';
+                consent.ad_personalization = 'granted';
+            }
+        }
+        return consent;
     };
-    updateConsent(init.customerPrivacy);
-
+    // Shopify dynamically determine default consent based on user current region or previous consent choice
+    const ShopifyCurrentRegionConsent = getConsentChoice(init.customerPrivacy);
+    ShopifyCurrentRegionConsent.wait_for_update = 100;
+    gtag('consent', 'default', ShopifyCurrentRegionConsent);
     api.customerPrivacy.subscribe('visitorConsentCollected', (event) => {
-        updateConsent(event.customerPrivacy);
+        gtag('consent', 'update', getConsentChoice(event.customerPrivacy));
     });
 }
 
 { // <!-- Google tag (gtag.js) -->
+    gtag('set', { page_location: init.context?.window.location.href });
+    gtag('js', new Date());
+    gtag('config', GA4_MEASUREMENT_ID, { send_page_view: false });
     const script = document.createElement('script');
     script.setAttribute('src', 'https://www.googletagmanager.com/gtag/js?id=' + GA4_MEASUREMENT_ID);
     script.setAttribute('async', '');
     document.head.appendChild(script);
     analytics.subscribe('page_viewed', (event) => { // https://shopify.dev/docs/api/web-pixels-api/standard-events/page_viewed
         // may be Single Page App (no full page reload), e.g. in between checkout_started and checkout_completed
-        gtag('set', { page_location: event.context?.window.location.href });
-        gtag('js', new Date());
-        gtag('config', GA4_MEASUREMENT_ID);
+        gtag('event', 'page_view', {
+            send_to: GA4_MEASUREMENT_ID,
+            page_location: event.context?.window.location.href
+        });
     });
 
-    { // patches for common events
-        const _sendEnagement = (engagedTime) => {
-            if (engagedTime >= 1000)
-                gtag('event', 'user_engagement', { engagement_time_msec: Math.min(engagedTime, 600000) });
+    { // patches for engagement time
+        const setupManualEngagement = _ => {
+            let lastFocusTime = Date.now();
+            let engagedTime = 0;
+            document.addEventListener('visibilitychange', e => {
+                if (document.visibilityState === 'visible')
+                    lastFocusTime = Date.now();
+                else
+                    engagedTime += Date.now() - lastFocusTime;
+            });
+            window.addEventListener('beforeunload', e => {
+                if (document.cookie.includes('_ga_'))
+                    gtag('event', 'user_engagement', { engagement_time_msec: Math.min(Date.now() - lastFocusTime + engagedTime, 600000) });
+            });
         };
-        let lastFocusTime = Date.now();
-        document.addEventListener('visibilitychange', e => {
-            if (document.visibilityState === 'visible') {
-                lastFocusTime = Date.now();
-            }
-            else {
-                _sendEnagement(Date.now() - lastFocusTime);
-            }
-        });
-        window.addEventListener('beforeunload', e => {
-            _sendEnagement(Date.now() - lastFocusTime);
-        });
+        const setupManualEngagementLater = _ => {
+            let pid = 0;
+            const handler = _ => {
+                clearTimeout(pid);
+                pid = setTimeout(_ => {
+                    if (document.visibilityState !== 'visible') return;
+                    setupManualEngagement();
+                    document.removeEventListener('visibilitychange', handler);
+                }, 1000);
+            };
+            document.addEventListener('visibilitychange', handler);
+        };
+        if (document.visibilityState === 'visible') {
+            setTimeout(_ => {
+                if (document.visibilityState === 'visible') {
+                    setupManualEngagement();
+                } else {
+                    setupManualEngagementLater();
+                }
+            }, 1000);
+        }
+        else {
+            setupManualEngagementLater();
+        }
     }
 }
 
 
-const _setUPD = (checkout) => {
-    // const checkout = event.data.checkout;
-    const upd = {};
-    upd.email = checkout.email?.trim().toLowerCase();
-    upd.phone_number = checkout.phone?.trim() || checkout.billingAddress.phone?.trim();
+{ // from begin_checkout to purchase
+    const _setUPD = (checkout) => {
+        // const checkout = event.data.checkout;
+        const upd = {};
+        upd.email = checkout.email?.trim().toLowerCase();
+        upd.phone_number = checkout.phone?.trim() || checkout.billingAddress.phone?.trim();
 
-    const address = checkout.billingAddress;
-    upd.address = {
-        first_name: address.firstName,
-        last_name: address.lastName,
-        country: address.countryCode,
-        postal_code: address.zip,
+        const address = checkout.billingAddress;
+        upd.address = {
+            first_name: address.firstName,
+            last_name: address.lastName,
+            country: address.countryCode,
+            postal_code: address.zip,
 
-        street: address.address1 || undefined,
-        city: address.city || undefined,
-        region: address.province || undefined,
-    };
-    gtag('set', 'user_data', upd);
-};
-
-
-// ga4 purchase event
-analytics.subscribe('checkout_completed', (event) => {
-    // purchase /thank-you page has no page reload, persists dataLayer from checkout_started page
-    gtag('event', 'page_view', {
-        'send_to': GA4_MEASUREMENT_ID,
-        page_location: event.context?.window.location.href
-    });
-
-    if (!event.data.checkout.order || !event.data.checkout.order.id) {
-        gtag('event', 'exception', {
-            'send_to': GA4_MEASUREMENT_ID,
-            'description': 'purchase has no order id, payment incomplete',
-            'fatal': false
-        });
-        console.error('purchase has no order id, payment incomplete');
-        return;
-    }
-
-    const items = event.data.checkout.lineItems.map(r => {
-        const x = {
-            item_id: GET_PRODUCT_ID(r.variant),
-            item_name: r.variant.product.title,
-            quantity: r.quantity,
-            price: r.variant.price.amount,
-            currency: r.variant.price.currencyCode,
-            discount: r.discountApplications?.reduce((t, d) => t + d.amount, 0.00),
-            item_variant: r.variant.title
+            street: address.address1 || undefined,
+            city: address.city || undefined,
+            region: address.province || undefined,
         };
-        return x;
+        gtag('set', 'user_data', upd);
+    };
+    // ga4 purchase event
+    analytics.subscribe('checkout_completed', (event) => {
+        if (!event.data.checkout.order || !event.data.checkout.order.id) {
+            gtag('event', 'exception', {
+                'send_to': GA4_MEASUREMENT_ID,
+                'description': 'purchase has no order id, payment incomplete?',
+                'fatal': false
+            });
+            console.warn('purchase has no order id, payment incomplete?');
+        }
+
+        const items = event.data.checkout.lineItems.map(r => {
+            const x = {
+                item_id: GET_PRODUCT_ID(r.variant),
+                item_name: r.variant.product.title,
+                quantity: r.quantity,
+                price: r.variant.price.amount,
+                currency: r.variant.price.currencyCode,
+                discount: r.discountApplications?.reduce((t, d) => t + d.amount, 0.00),
+                item_variant: r.variant.title
+            };
+            return x;
+        });
+
+        const checkout = event.data.checkout;
+        _setUPD(checkout);
+        gtag('event', 'purchase', {
+            'send_to': GA4_MEASUREMENT_ID,
+            'items': items,
+            'value': checkout.subtotalPrice.amount,
+            'currency': checkout.subtotalPrice.currencyCode,
+            'shipping': checkout.shippingLine?.price.amount,
+            'tax': checkout.totalTax?.amount,
+            'transaction_id': checkout.order?.id || new Date().toISOString() + ' ' + Math.random(),
+            page_location: event.context?.window.location.href
+        });
     });
 
-    const checkout = event.data.checkout;
-    _setUPD(checkout);
-    gtag('event', 'purchase', {
-        'send_to': GA4_MEASUREMENT_ID,
-        'items': items,
-        'value': checkout.subtotalPrice.amount,
-        'currency': checkout.subtotalPrice.currencyCode,
-        'shipping': checkout.shippingLine?.price.amount,
-        'tax': checkout.totalTax?.amount,
-        'transaction_id': checkout.order.id,
-        page_location: event.context?.window.location.href
+    let beginCheckoutTime;
+    // ga4 begin checkout event
+    analytics.subscribe('checkout_started', (event) => {
+        beginCheckoutTime = Date.now();
+        const items = event.data.checkout.lineItems.map(r => {
+            const x = {
+                item_id: GET_PRODUCT_ID(r.variant),
+                item_name: r.variant.product.title,
+                quantity: r.quantity,
+                price: r.variant.price.amount,
+                currency: r.variant.price.currencyCode,
+                item_variant: r.variant.title
+            };
+            return x;
+        });
+
+        gtag('event', 'begin_checkout', {
+            'send_to': GA4_MEASUREMENT_ID,
+            'items': items,
+            'value': event.data.checkout.subtotalPrice.amount,
+            'currency': event.data.checkout.subtotalPrice.currencyCode,
+            'shipping': event.data.checkout.shippingLine?.price.amount,
+            'tax': event.data.checkout.totalTax?.amount
+        });
     });
-});
+
+    // ga4 add payment info
+    analytics.subscribe('payment_info_submitted', (event) => {
+        const items = event.data.checkout.lineItems.map(r => {
+            const x = {
+                item_id: GET_PRODUCT_ID(r.variant),
+                item_name: r.variant.product.title,
+                quantity: r.quantity,
+                price: r.variant.price.amount,
+                currency: r.variant.price.currencyCode,
+                item_variant: r.variant.title
+            };
+            return x;
+        });
+
+        const checkout = event.data.checkout;
+        _setUPD(checkout);
+        gtag('event', 'add_payment_info', {
+            'send_to': GA4_MEASUREMENT_ID,
+            'items': items,
+            'value': checkout.subtotalPrice.amount,
+            'currency': checkout.subtotalPrice.currencyCode,
+            'shipping': checkout.shippingLine?.price.amount,
+            'tax': checkout.totalTax?.amount
+        });
+
+        const engagedTime = Date.now() - beginCheckoutTime;
+        if (engagedTime >= 1000)
+            gtag('event', 'user_engagement', { engagement_time_msec: Math.min(engagedTime, 600000) });
+    });
+}
 
 
 // ga4 view item event
@@ -182,59 +257,6 @@ analytics.subscribe('product_added_to_cart', (event) => {
             currency: event.data.cartLine.merchandise.price.currencyCode,
             item_variant: event.data.cartLine.merchandise.title
         }]
-    });
-});
-
-
-// ga4 begin checkout event
-analytics.subscribe('checkout_started', (event) => {
-    const items = event.data.checkout.lineItems.map(r => {
-        const x = {
-            item_id: GET_PRODUCT_ID(r.variant),
-            item_name: r.variant.product.title,
-            quantity: r.quantity,
-            price: r.variant.price.amount,
-            currency: r.variant.price.currencyCode,
-            item_variant: r.variant.title
-        };
-        return x;
-    });
-
-    gtag('event', 'begin_checkout', {
-        'send_to': GA4_MEASUREMENT_ID,
-        'items': items,
-        'value': event.data.checkout.subtotalPrice.amount,
-        'currency': event.data.checkout.subtotalPrice.currencyCode,
-        'shipping': event.data.checkout.shippingLine?.price.amount,
-        'tax': event.data.checkout.totalTax?.amount
-    });
-});
-
-
-
-// ga4 add payment info
-analytics.subscribe('payment_info_submitted', (event) => {
-    const items = event.data.checkout.lineItems.map(r => {
-        const x = {
-            item_id: GET_PRODUCT_ID(r.variant),
-            item_name: r.variant.product.title,
-            quantity: r.quantity,
-            price: r.variant.price.amount,
-            currency: r.variant.price.currencyCode,
-            item_variant: r.variant.title
-        };
-        return x;
-    });
-
-    const checkout = event.data.checkout;
-    _setUPD(checkout);
-    gtag('event', 'add_payment_info', {
-        'send_to': GA4_MEASUREMENT_ID,
-        'items': items,
-        'value': checkout.subtotalPrice.amount,
-        'currency': checkout.subtotalPrice.currencyCode,
-        'shipping': checkout.shippingLine?.price.amount,
-        'tax': checkout.totalTax?.amount
     });
 });
 
