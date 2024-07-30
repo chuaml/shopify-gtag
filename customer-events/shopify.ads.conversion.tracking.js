@@ -79,14 +79,8 @@ const _setUPD = (checkout) => {
 
 // purchase
 analytics.subscribe('checkout_completed', (event) => {
-    // purchase /thank-you page has no page reload, persists dataLayer from checkout_started page
-    gtag('event', 'page_view', {
-        'send_to': ADS_GOOGLE_TAG_ID,
-        page_location: event.context?.window.location.href
-    });
-
     const checkout = event.data.checkout;
-    _setUPD(event.data.checkout);
+    _setUPD(checkout);
     gtag('event', 'conversion', {
         'send_to': 'AW-8888888888/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // **change xxx to Conversion Label**
         // 'value': checkout.subtotalPrice.amount, // only product total price
