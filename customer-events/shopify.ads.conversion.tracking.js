@@ -137,6 +137,47 @@ analytics.subscribe('search_submitted', (event) => {
     });
 });
 
+// form submission
+analytics.subscribe('form_submitted', (event) => {
+    const form = event.data.element;
+    if (form.id === 'ContectFormxxxxxxxxxxxxxxxxxxxxxxx') {
+        const inputs = form.elements.filter(x => (x.tagName === 'INPUT' || x.tagName === 'TEXTAREA') && x.value !== null);
+
+        let email = inputs.find(x => x.type === 'email').value.trim().toLowerCase();
+        let phone = inputs.find(x => x.type === 'tel').value.trim();
+        let name = inputs.find(x => x.id === 'ContactForm-name').value.trim();
+        if (email.includes('@') && 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy') {
+            gtag('set', 'user_data', { email: email });
+            gtag('event', 'conversion', {
+                'send_to': 'AW-8888888888/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // **change xxx to Conversion Label**
+            });
+        }
+    }
+});
+
+
+// link clicks
+analytics.subscribe('clicked', (event) => {
+    const a = event.data.element;
+    if (a.tagName !== 'A' || a.href === null || a.href === '') return;
+
+    if (a.href === 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy') { // link click
+        gtag('event', 'conversion', {
+            'send_to': 'AW-8888888888/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // **change xxx to Conversion Label**
+        });
+    }
+    else if (a.href.startsWith('mailto:')) { // email click
+        gtag('event', 'conversion', {
+            'send_to': 'AW-8888888888/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // **change xxx to Conversion Label**
+        });
+    }
+    else if (a.href.startsWith('tel:')) { // phone click
+        gtag('event', 'conversion', {
+            'send_to': 'AW-8888888888/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // **change xxx to Conversion Label**
+        });
+    }
+});
+
 
 
 
