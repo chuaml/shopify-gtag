@@ -25,7 +25,6 @@ Integrating GA4 via Custom Pixel will result certain GA4 automatic collected eve
 certain Enhanced Event Measurements will not work properly in Custom Pixel, (mostly affect to GA4 tracking) e.g.:
 - `scroll` will always falsely trigger and sent
     - may trigger earlier than `session_start` resulting `(not set)` in traffic _source / medium_ ?
-- `click` outbound clicks on `<a>` cannot be detected and will not trigger 
 - etc...
 - https://support.google.com/analytics/answer/9216061?hl=en
 

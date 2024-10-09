@@ -114,6 +114,46 @@ function gtag() { dataLayer.push(arguments); }
             setupManualEngagementLater();
         }
     }
+
+    { // patches for common events
+        analytics.subscribe('form_submitted', (event) => {
+            const element = event.data.element;
+            let isValid = false;
+
+            const email = element.elements.find(x => x.tagName === 'INPUT' && x.type === 'email' && x.value !== null)?.value.trim().toLowerCase();
+            if (email !== undefined && email.length > 6 && email.includes('@')) {
+                gtag('set', 'user_data', { email: email });
+                isValid = true;
+            }
+
+            const phone = element.elements.find(x => x.tagName === 'INPUT' && x.type === 'tel' && x.value !== null)?.value.replace(/[^0-9]+/g, '');
+            if (phone !== undefined && phone.length < 16 && /^[0-9]+$/.test(phone)) {
+                gtag('set', 'user_data', { phone_number: '+' + phone });
+                isValid = true;
+            }
+
+            // at least something valid is filled in
+            if (isValid || element.elements.find(x => x.tagName === 'INPUT' && x.type === 'text' && x.value !== null && x.value !== '') !== undefined) {
+                gtag('event', 'form_submit', {
+                    'send_to': GA4_MEASUREMENT_ID,
+                    form_id: element.id,
+                    form_destination: element.action,
+                    engagement_time_msec: 1000
+                });
+            }
+        });
+
+        analytics.subscribe('clicked', (event) => {
+            const element = event.data.element;
+            if (element.tagName !== 'A' || element.href === null || element.href === '') return;
+            gtag('event', 'click', {
+                'send_to': GA4_MEASUREMENT_ID,
+                link_id: element.id,
+                link_url: element.href,
+                engagement_time_msec: 1000
+            });
+        });
+    }
 }
 
 
@@ -270,8 +310,25 @@ analytics.subscribe('product_added_to_cart', (event) => {
 
 // search product title
 analytics.subscribe('search_submitted', (event) => {
-    // if (event.data.searchResult.productVariants.length < 1) return; // filter empty result
+    // if (event.data.searchResult.productVariants.length < 1) return; // filter out empty result
     gtag('event', 'search', {
+        'send_to': GA4_MEASUREMENT_ID,
         search_term: event.data.searchResult.query.trim()
     });
 });
+
+// auto capture enter email during begin checkout
+if (init.context?.window.location.pathname.startsWith('/checkouts/') === true) {
+    analytics.subscribe('input_changed', (event) => {
+        const element = event.data.element;
+        if (element.tagName !== 'INPUT') return;
+        if (element.type !== 'text' && element.type !== 'email') return;
+        if (element.id !== null && element.id.includes('email') === false) return;
+
+        const email = element.value?.trim();
+        if (email === undefined || email === '') return;
+
+        if (email.length > 6 && email.includes('@'))
+            gtag('set', 'user_data', { email: email.toLowerCase() });
+    });
+}
