@@ -12,6 +12,15 @@ window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
 
 { // Google Consent Mode v2
+    gtag('consent', 'default', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        wait_for_update: 100
+    });
+
+    // Shopify dynamically set consent based on user's previous consent choice or current region default 
     const getConsentChoice = (customerPrivacy) => {
         const consent = {
             analytics_storage: 'denied',
@@ -31,10 +40,8 @@ function gtag() { dataLayer.push(arguments); }
         }
         return consent;
     };
-    // Shopify dynamically determine default consent based on user current region or previous consent choice
-    const ShopifyCurrentRegionConsent = getConsentChoice(init.customerPrivacy);
-    ShopifyCurrentRegionConsent.wait_for_update = 100;
-    gtag('consent', 'default', ShopifyCurrentRegionConsent);
+    gtag('consent', 'update', getConsentChoice(init.customerPrivacy));
+
     api.customerPrivacy.subscribe('visitorConsentCollected', (event) => {
         gtag('consent', 'update', getConsentChoice(event.customerPrivacy));
     });
